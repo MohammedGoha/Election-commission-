@@ -1,0 +1,22 @@
+@import "tailwindcss";
+@import "./css/var.css";
+
+button {
+  cursor: pointer;
+}
+textarea {
+  resize: none;
+}
+aside .logo {
+  width: 100px;
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.login-page{ 
+  background-image: url(../public/loading\ state.png);
+  width: 100%;
+  background-repeat: no-repeat;
+  background-size: cover;
+}

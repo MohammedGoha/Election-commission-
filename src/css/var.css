@@ -1,0 +1,25 @@
+:root {
+    /* Primary Colors */
+    --color-primary: #1565C0;
+    --color-secondary: #42A5F5;
+
+    /* Status Colors */
+    --color-success: #43A047;
+    --color-danger: #E53935;
+    --color-warning: #FFC107;
+
+    /* Text Colors */
+    --color-text-primary: #212121;
+    --color-text-secondary: #757575;
+    --color-text-disabled: #9E9E9E;
+
+    /* Background Colors */
+    --color-background: #F5F5F5;
+    --color-white: #FFFFFF;
+
+    /* Border Radius */
+    --border-radius: 12px;
+
+    /* Shadows */
+    --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
