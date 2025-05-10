@@ -31,21 +31,70 @@ type Election = {
 
 const CurrentElection: React.FC = () => {
   const [election, setElection] = useState<Election | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // Fetch election initially
   useEffect(() => {
     const fetchElection = async () => {
-      const res = await fetch("http://localhost:4000/elections");
-      const data: Election[] = await res.json();
-      const current = data.find((e) => e.electionStatus === "active");
-      if (current) setElection(current);
+      try {
+        const res = await fetch("http://localhost:4000/elections");
+        const data: Election[] = await res.json();
+        const current = data.find((e) => e.electionStatus === "active");
+        if (current) {
+          setElection(current);
+          setError(null); // clear previous error
+        } else {
+          setElection(null);
+        }
+      } catch (err) {
+        console.error("Server error while fetching elections", err);
+        setError("تعذر الاتصال بالخادم. سيتم إعادة المحاولة...");
+      }
     };
-    fetchElection();
-  }, []);
 
-  const formatDate = (isoDate: string) => {
-    return new Date(isoDate).toLocaleString("ar-EG");
-  };
+    fetchElection();
+
+    // Retry every 15 seconds if error happens
+    const retryInterval = setInterval(() => {
+      if (!election) {
+        console.log("refetch the server was failing ");
+        fetchElection();
+      }
+    }, 15000);
+
+    return () => clearInterval(retryInterval);
+  }, [election]);
+
+  // Refresh vote tally every 2 minutes
+  useEffect(() => {
+    if (!election) return;
+
+    const refreshTally = async () => {
+      try {
+        console.log("refetch the server was failing ");
+        const res = await fetch("http://localhost:4000/elections");
+        const data: Election[] = await res.json();
+        const updated = data.find((e) => e.electionId === election.electionId);
+        if (updated) {
+          setElection((prev) => ({
+            ...prev!,
+            voteTally: updated.voteTally,
+          }));
+          setError(null);
+        }
+      } catch (err) {
+        console.warn("Failed to refresh tally");
+        setError("فشل الاتصال بالخادم لتحديث عدد الأصوات."); // ✅ show error
+      }
+    };
+
+    const interval = setInterval(refreshTally, 120000); // every 2 minutes
+    return () => clearInterval(interval);
+  }, [election]);
+
+  const formatDate = (isoDate: string) =>
+    new Date(isoDate).toLocaleString("ar-EG");
 
   const voteChartData = election?.candidates.map((cand) => ({
     name: cand.name,
@@ -61,11 +110,15 @@ const CurrentElection: React.FC = () => {
         رجوع
       </button>
 
-      {!election ? (
+      {error && (
+        <p className="text-center text-red-500 font-bold mb-4">{error}</p>
+      )}
+
+      {!election && !error ? (
         <p className="text-center text-gray-500">
           جاري تحميل بيانات الانتخابات...
         </p>
-      ) : (
+      ) : election ? (
         <>
           <h1 className="text-3xl font-bold text-center mb-4">
             {election.electionName}
@@ -99,16 +152,14 @@ const CurrentElection: React.FC = () => {
               <XAxis dataKey="name" />
               <YAxis
                 tick={{ dx: -30, textAnchor: "end", fontSize: 14 }}
-                style={{
-                  textAlign: "right",
-                }}
+                style={{ textAlign: "right" }}
               />
               <Tooltip />
               <Bar dataKey="votes" fill="#1565C0" name="عدد الأصوات" />
             </BarChart>
           </ResponsiveContainer>
         </>
-      )}
+      ) : null}
     </div>
   );
 };

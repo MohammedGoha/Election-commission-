@@ -3,11 +3,11 @@ import "../App.css";
 const Sidebar = () => {
   const navItems = [
     { href: "/election/create", label: "إنشاء انتخابات" },
+    { href: "/currentElection", label: "الانتخابات الحالية" },
     { href: "/election/manage", label: "إدارة الانتخابات" },
     { href: "/voters/participation", label: "سجل مشاركة الناخبين" },
     { href: "/election/results", label: "إعلان النتائج" },
     { href: "/audits/logs", label: "سجلات المراجعة" },
-    { href: "/currentElection", label: "الانتخابات الحالية" },
     { href: "/security/alerts", label: "تنبيهات الأمان" },
   ];
 

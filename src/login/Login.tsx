@@ -30,10 +30,11 @@ kHJuJDngEjX8iTv5+NDxLyZmOaMvIV8Xj3H2OEn4npGp7yja/5ItRP2V
   useEffect(() => {
     const savedCert = localStorage.getItem("cert");
     const savedKey = localStorage.getItem("key");
-
     if (
-      savedCert?.includes("BEGIN CERTIFICATE") &&
-      savedKey?.includes("BEGIN PRIVATE KEY")
+      savedCert?.trim().replace(/(\r\n|\n|\r)/gm, "") ==
+        testcert.trim().replace(/(\r\n|\n|\r)/gm, "") &&
+      savedKey?.trim().replace(/(\r\n|\n|\r)/gm, "") ==
+        testprivatekey.trim().replace(/(\r\n|\n|\r)/gm, "")
     ) {
       props.getMeIn();
     }
@@ -61,20 +62,28 @@ kHJuJDngEjX8iTv5+NDxLyZmOaMvIV8Xj3H2OEn4npGp7yja/5ItRP2V
     setTimeout(() => {
       const valid =
         email === testEmail &&
-        certContent.includes("BEGIN CERTIFICATE") &&
-        keyContent.includes("BEGIN PRIVATE KEY");
-
+        certContent.trim().replace(/(\r\n|\n|\r)/gm, "") ==
+          testcert.trim().replace(/(\r\n|\n|\r)/gm, "") &&
+        keyContent.trim().replace(/(\r\n|\n|\r)/gm, "") ==
+          testprivatekey.trim().replace(/(\r\n|\n|\r)/gm, "");
+      console.log(
+        certContent.trim().replace(/(\r\n|\n|\r)/gm, "") ==
+          testcert.trim().replace(/(\r\n|\n|\r)/gm, "")
+      );
+      console.log(
+        keyContent.trim() == testprivatekey.trim().replace(/(\r\n|\n|\r)/gm, "")
+      );
       if (valid) {
-        console.log("abc");
-        console.log(certContent);
-        console.log(keyContent);
-        localStorage.setItem("cert", certContent);
-        localStorage.setItem("key", keyContent);
+        localStorage.setItem(
+          "cert",
+          certContent.trim().replace(/(\r\n|\n|\r)/gm, "")
+        );
+        localStorage.setItem(
+          "key",
+          keyContent.trim().replace(/(\r\n|\n|\r)/gm, "")
+        );
         props.getMeIn();
       } else {
-        console.log(certContent);
-        console.log(keyContent);
-        console.log("def");
         setRight(true);
         setLoading(false);
       }
