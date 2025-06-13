@@ -1,96 +1,63 @@
 import { useState, useEffect } from "react";
-
+import API_BASE from "../assets/glob";
+import { useAuth } from "../context/AuthContext";
 export default function LoginPage(props: any) {
-  const [email, setEmail] = useState("");
-  const [certContent, setCertContent] = useState("");
-  const [keyContent, setKeyContent] = useState("");
-  const [right, setRight] = useState(false);
+  const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const testEmail = "mohamed Goha";
-  const testcert = `-----BEGIN CERTIFICATE-----
-MIIB8TCCAZegAwIBAgIUfX3XGpWqD1CQEKn9uHp1EHz1ZaswCgYIKoZIzj0EAwIw
-EDEOMAwGA1UEAwwFdm90ZWNodTAeFw0yNTA1MDcwMDAwMDBaFw0yNTA1MDgwMDAw
-MDBaMBAxDjAMBgNVBAMMBXZvdGVjaHUwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNC
-AAQ8f6zW93C0Dbp3kxSRkVDbzKyr28s9kHJuJDngEjX8iTv5+NDxLyZmOaMvIV8X
-j3H2OEn4npGp7yja/5ItRP2Vo1MwUTAdBgNVHQ4EFgQUrH6E67/0BRoLQjof73q8
-YXq3gCswHwYDVR0jBBgwFoAUrH6E67/0BRoLQjof73q8YXq3gCswDwYDVR0TAQH/
-BAUwAwEB/zAKBggqhkjOPQQDAgNIADBFAiEApwmdnv2YPR+hOIgCy5ePj2KiKTb9
-2rM0ZgYftmIDDFo8CICPl/jkEBYV3dcFAjsNGoZGpQmsq1I7lL3Pj3hMRRngn
------END CERTIFICATE-----
-`;
-  const testprivatekey = `
------BEGIN PRIVATE KEY-----
-MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgNcEcVqM72ZyMWb8F
-xssRkuK3R7gRuRGCfP/FeHCSvAChRANCAAQ8f6zW93C0Dbp3kxSRkVDbzKyr28s9
-kHJuJDngEjX8iTv5+NDxLyZmOaMvIV8Xj3H2OEn4npGp7yja/5ItRP2V
------END PRIVATE KEY-----
-`;
-  // Auto login if cert/key exist in localStorage
+  const [error, setError] = useState(false);
+  const { login } = useAuth();
+  // On mount: check if private key exists but access token is missing/expired
   useEffect(() => {
-    const savedCert = localStorage.getItem("cert");
-    const savedKey = localStorage.getItem("key");
-    if (
-      savedCert?.trim().replace(/(\r\n|\n|\r)/gm, "") ==
-        testcert.trim().replace(/(\r\n|\n|\r)/gm, "") &&
-      savedKey?.trim().replace(/(\r\n|\n|\r)/gm, "") ==
-        testprivatekey.trim().replace(/(\r\n|\n|\r)/gm, "")
-    ) {
-      props.getMeIn();
+    const privateKey = localStorage.getItem("private_key");
+    const accessToken = localStorage.getItem("access_token");
+
+    // Optional: check if token is expired (here we just check presence)
+
+    if (!accessToken && privateKey) {
+      // Let user log in with phone to get new access token
+    } else if (accessToken && privateKey) {
+      // props.getMeIn(); // Already logged in
+      login();
     }
   }, []);
 
-  const handleFileChange = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-    type: "cert" | "key"
-  ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (type === "cert") setCertContent(content);
-      else setKeyContent(content);
-    };
-    reader.readAsText(file);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(false);
 
-    setTimeout(() => {
-      const valid =
-        email === testEmail &&
-        certContent.trim().replace(/(\r\n|\n|\r)/gm, "") ==
-          testcert.trim().replace(/(\r\n|\n|\r)/gm, "") &&
-        keyContent.trim().replace(/(\r\n|\n|\r)/gm, "") ==
-          testprivatekey.trim().replace(/(\r\n|\n|\r)/gm, "");
-      console.log(
-        certContent.trim().replace(/(\r\n|\n|\r)/gm, "") ==
-          testcert.trim().replace(/(\r\n|\n|\r)/gm, "")
-      );
-      console.log(
-        keyContent.trim() == testprivatekey.trim().replace(/(\r\n|\n|\r)/gm, "")
-      );
-      if (valid) {
-        localStorage.setItem(
-          "cert",
-          certContent.trim().replace(/(\r\n|\n|\r)/gm, "")
-        );
-        localStorage.setItem(
-          "key",
-          keyContent.trim().replace(/(\r\n|\n|\r)/gm, "")
-        );
-        props.getMeIn();
+    try {
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ phoneNumber: phone }),
+      });
+
+      if (!response.ok) throw new Error("Failed to login");
+
+      const data = await response.json();
+
+      if (data.access_token) {
+        localStorage.setItem("access_token", data.access_token);
+        // props.getMeIn(); // Navigate into app
+        login();
       } else {
-        setRight(true);
-        setLoading(false);
+        throw new Error("No access token returned");
       }
-    }, 1000);
+    } catch (err) {
+      console.log(err);
+      setError(true);
+      setLoading(false);
+    }
   };
 
-  if (right) setTimeout(() => setRight(false), 5000);
+  if (error)
+    setTimeout(() => {
+      setError(false);
+      console.log(error);
+    }, 5000);
 
   return (
     <div className="min-h-screen flex items-center justify-center relative">
@@ -110,9 +77,9 @@ kHJuJDngEjX8iTv5+NDxLyZmOaMvIV8Xj3H2OEn4npGp7yja/5ItRP2V
           onSubmit={handleSubmit}
           className="bg-white/60 backdrop-blur-sm rounded-xl shadow-xl p-8 space-y-6"
         >
-          {right && (
+          {error && (
             <div className="text-red-600 text-center font-semibold">
-              البيانات غير صحيحة أو مفقودة
+              فشل تسجيل الدخول. تأكد من صحة الرقم.
             </div>
           )}
 
@@ -123,44 +90,16 @@ kHJuJDngEjX8iTv5+NDxLyZmOaMvIV8Xj3H2OEn4npGp7yja/5ItRP2V
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-lg mb-2">
-                اسم المستخدم
+              <label htmlFor="phone" className="block text-lg mb-2">
+                رقم الهاتف
               </label>
               <input
                 type="text"
-                id="email"
+                id="phone"
                 required
                 className="w-full px-4 py-2 border border-black-300 rounded-lg"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="certFile" className="block text-lg mb-2">
-                شهادة الدخول (Certificate)
-              </label>
-              <input
-                type="file"
-                id="certFile"
-                accept=".pem,.crt,.cert,.txt"
-                onChange={(e) => handleFileChange(e, "cert")}
-                className="w-full px-4 py-2 border border-black-300 rounded-lg bg-white"
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="keyFile" className="block text-lg mb-2">
-                المفتاح الخاص (Private Key)
-              </label>
-              <input
-                type="file"
-                id="keyFile"
-                accept=".pem,.key,.txt"
-                onChange={(e) => handleFileChange(e, "key")}
-                className="w-full px-4 py-2 border border-black-300 rounded-lg bg-white"
-                required
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
               />
             </div>
           </div>

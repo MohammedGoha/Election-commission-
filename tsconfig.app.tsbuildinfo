@@ -1,1 +1,20 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/charts/charts.tsx","./src/components/sidebar.tsx","./src/login/login.tsx","./src/pages/auditlogs.tsx","./src/pages/createelection.tsx","./src/pages/currentelection.tsx","./src/pages/electionresults.tsx","./src/pages/manageelection.tsx","./src/pages/securityalerts.tsx","./src/pages/voterparticipation.tsx","./src/pages/welcome.tsx"],"errors":true,"version":"5.7.3"}
+{
+  "root": [
+    "./src/app.tsx",
+    "./src/main.tsx",
+    "./src/vite-env.d.ts",
+    "./src/charts/charts.tsx",
+    "./src/components/sidebar.tsx",
+    "./src/login/login.tsx",
+    "./src/pages/auditlogs.tsx",
+    "./src/pages/createelection.tsx",
+    "./src/pages/currentelection.tsx",
+    "./src/pages/PublishElection.tsx",
+    "./src/pages/manageelection.tsx",
+    "./src/pages/securityalerts.tsx",
+    "./src/pages/voterparticipation.tsx",
+    "./src/pages/welcome.tsx"
+  ],
+  "errors": true,
+  "version": "5.7.3"
+}

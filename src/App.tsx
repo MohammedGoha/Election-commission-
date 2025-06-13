@@ -1,49 +1,83 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Login from "./login/Login";
+import { Routes, Route, Navigate } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import CreateElection from "./pages/CreateElection";
 import ManageElection from "./pages/ManageElection";
-import VoterParticipation from "./pages/VoterParticipation";
-import ElectionResults from "./pages/ElectionResults";
+import PublishElection from "./pages/PublishElection";
+// import VoterParticipation from "./pages/VoterParticipation";
 import CurrentElection from "./pages/CurrentElection";
-import AuditLogs from "./pages/AuditLogs";
-import SecurityAlerts from "./pages/SecurityAlerts";
-import Welcome from "./pages/welcome";
-import { useState } from "react";
+// import Welcome from "./pages/welcome";
+import RegisterPage from "./login/RegisterPage";
+import Login from "./login/Login";
+import UsersPage from "./pages/UsersPage";
+import ChainCodeEvents from "./pages/ChaincodeEvents";
+import { useAuth } from "./context/AuthContext";
+import TallyVerification from "./pages/TallyVerification";
+import VoterActivityLog from "./pages/VoterActivityLog";
+// import SecurityAlerts from "./pages/SecurityAlerts";
+
 function App() {
-  const [logedIn, setLogedIn] = useState(false);
-  const loged = (): void => {
-    setLogedIn(true);
-  };
-  if (logedIn) {
+  const { isLoggedIn, isAuthorized, role } = useAuth();
+
+  if (!isLoggedIn) {
     return (
-      <BrowserRouter>
-        <div className="flex">
-          <Sidebar />
-          <main className="flex-1 p-6">
-            <Routes>
-              <Route path="/" element={<Welcome />} />
-              <Route path="/election/create" element={<CreateElection />} />
-              <Route path="/election/manage" element={<ManageElection />} />
-              <Route
-                path="/voters/participation"
-                element={<VoterParticipation />}
-              />
-              <Route path="/election/results" element={<ElectionResults />} />
-              <Route
-                path="/currentElection"
-                element={<CurrentElection />}
-              />
-              <Route path="/audits/logs" element={<AuditLogs />} />
-              <Route path="/security/alerts" element={<SecurityAlerts />} />
-            </Routes>
-          </main>
-        </div>
-      </BrowserRouter>
+      <Routes>
+        <Route path="/*" element={<RegisterPage />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    );
+  }
+
+  if (!isAuthorized) {
+    return (
+      <Routes>
+        <Route path="/*" element={<Login />} />
+        <Route path="*" element={<Navigate to="/login" />} />
+      </Routes>
+    );
+  }
+
+  // Authenticated + Authorized view
+  let routes = null;
+  if (role === "election_commission") {
+    routes = (
+      <Routes>
+        <Route path="/currentElection/:id" element={<CurrentElection />} />
+        <Route path="/election/create" element={<CreateElection />} />
+        <Route path="/election/manage" element={<ManageElection />} />
+        <Route path="/election/results" element={<PublishElection />} />
+        <Route path="/users/manage" element={<UsersPage />} />
+        <Route path="/system/logs" element={<ChainCodeEvents />} />
+        <Route path="/audits/voter-activity" element={<VoterActivityLog />} />
+        <Route path="*" element={<Navigate to="/election/create" />} />
+      </Routes>
+    );
+  } else if (role === "auditor") {
+    routes = (
+      <Routes>
+        <Route path="/currentElection/:id" element={<CurrentElection />} />
+        <Route path="/election/manage" element={<ManageElection />} />
+        <Route path="/users/manage" element={<UsersPage />} />
+        <Route path="/system/logs" element={<ChainCodeEvents />} />
+        <Route
+          path="/audit/tally-verification"
+          element={<TallyVerification />}
+        />
+        <Route path="/audits/voter-activity" element={<VoterActivityLog />} />
+        <Route path="*" element={<Navigate to="/election/manage" />} />
+      </Routes>
     );
   } else {
-    return <Login getMeIn={loged} />;
+    // fallback: show nothing or a message
+    routes = <div>غير مصرح</div>;
   }
+
+  return (
+    <div className="flex">
+      <Sidebar />
+      <main className="flex-1 p-6">{routes}</main>
+    </div>
+  );
 }
 
 export default App;

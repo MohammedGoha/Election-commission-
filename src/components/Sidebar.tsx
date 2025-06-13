@@ -1,15 +1,30 @@
 import { NavLink } from "react-router-dom";
 import "../App.css";
+import { useAuth } from "../context/AuthContext";
+
 const Sidebar = () => {
-  const navItems = [
-    { href: "/election/create", label: "إنشاء انتخابات" },
-    { href: "/currentElection", label: "الانتخابات الحالية" },
-    { href: "/election/manage", label: "إدارة الانتخابات" },
-    { href: "/voters/participation", label: "سجل مشاركة الناخبين" },
-    { href: "/election/results", label: "إعلان النتائج" },
-    { href: "/audits/logs", label: "سجلات المراجعة" },
-    { href: "/security/alerts", label: "تنبيهات الأمان" },
-  ];
+  const { role } = useAuth();
+
+  let navItems: { href: string; label: string }[] = [];
+  if (role === "election_commission") {
+    navItems = [
+      { href: "/election/create", label: "إنشاء انتخابات" },
+      { href: "/election/manage", label: "إدارة الانتخابات" },
+      { href: "/election/results", label: "إعلان النتائج" },
+      // { href: "/audit/tally-verification", label: "تدقيق الانتخابات" },
+      { href: "/users/manage", label: "مراجعة الشهادات" },
+      { href: "/system/logs", label: "الاحداث" },
+      { href: "/audits/voter-activity", label: "بيانات الناخبين" },
+    ];
+  } else if (role === "auditor") {
+    navItems = [
+      { href: "/election/manage", label: "إدارة الانتخابات" },
+      { href: "/users/manage", label: "مراجعة الشهادات" },
+      { href: "/system/logs", label: "الاحداث" },
+      { href: "/audit/tally-verification", label: "تدقيق الانتخابات" },
+      { href: "/audits/voter-activity", label: "بيانات الناخبين" },
+    ];
+  }
 
   return (
     <aside

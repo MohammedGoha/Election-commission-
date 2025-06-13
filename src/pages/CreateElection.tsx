@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
+import API_BASE from "../assets/glob";
 const GOVERNORATES = [
   "القاهرة",
   "الجيزة",
@@ -33,280 +33,455 @@ const GOVERNORATES = [
 
 type Candidate = {
   name: string;
-  bio: string;
   party: string;
+  profileImage: File | null;
 };
 
-type Election = {
-  electionName: string;
-  startTime: string;
-  endTime: string;
-  electionDescription: string;
-  eligibleGovernorates: string[];
-  electionStatus: string;
+type FormCandidatePayload = {
+  name: string;
+  party: string;
+  profile_image: string;
 };
 
 const CreateElection = () => {
-  const [formData, setFormData] = useState<Election>({
-    electionName: "",
-    startTime: "",
-    endTime: "",
-    electionDescription: "",
-    eligibleGovernorates: [],
-    electionStatus: "pending",
-  });
-
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [governorates, setGovernorates] = useState<string[]>([]);
+  const [electionImage, setElectionImage] = useState<File | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [showGovModal, setShowGovModal] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [showGovModal, setShowGovModal] = useState(false);
   const navigate = useNavigate();
+  const status = "compeleted";
+  const token = localStorage.getItem("access_token");
+  // const API = "http://192.168.1.3:3000/api/v1";
 
-  const toggleGovernorate = (gov: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      eligibleGovernorates: prev.eligibleGovernorates.includes(gov)
-        ? prev.eligibleGovernorates.filter((g) => g !== gov)
-        : [...prev.eligibleGovernorates, gov],
-    }));
+  const uploadFile = async (file: File): Promise<string> => {
+    const form = new FormData();
+    form.append("file", file);
+
+    const res = await fetch(`${API_BASE}/uploads`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: form,
+    });
+
+    if (!res.ok) throw new Error("فشل في رفع الصورة");
+
+    const data = await res.json();
+    return data.url;
   };
+  // const uploadFile = (file: File) => {
+  //   return "none";
+  // };
 
-  const selectAllGovs = () => {
-    setFormData((prev) => ({
-      ...prev,
-      eligibleGovernorates:
-        prev.eligibleGovernorates.length === GOVERNORATES.length
-          ? []
-          : [...GOVERNORATES],
-    }));
-  };
-
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { id, value } = e.target;
-    setFormData((prev) => ({ ...prev, [id]: value }));
-  };
-
+  // useEffect(() => {
+  //   const fetchElections = async () => {
+  //     const res = await fetch("http://192.168.1.3:3000/api/v1/elections", {
+  //       method: "GET",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //         Authorization: `Bearer ${token}`,
+  //       },
+  //     });
+  //     if (!res.ok) {
+  //       throw new Error("Network response was not ok");
+  //     }
+  //     const data = await res.json();
+  //     console.log(data.massage);
+  //   };
+  //   fetchElections();
+  // });
   const handleCandidateChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-    index: number
+    index: number,
+    key: keyof Candidate,
+    value: string | File | null
   ) => {
-    const { name, value } = e.target;
     const updated = [...candidates];
-    updated[index] = { ...updated[index], [name]: value };
+    updated[index] = { ...updated[index], [key]: value };
     setCandidates(updated);
   };
 
-  const addCandidate = () => {
-    setCandidates([...candidates, { name: "", bio: "", party: "" }]);
-  };
-
-  const deleteCandidate = (index: number) => {
-    setCandidates(candidates.filter((_, i) => i !== index));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
+    setError("");
+
     if (
-      !formData.electionName ||
-      !formData.startTime ||
-      !formData.endTime ||
-      candidates.length < 2
+      !name ||
+      !startTime ||
+      !endTime ||
+      governorates.length === 0 ||
+      candidates.length < 2 ||
+      !electionImage
     ) {
-      setError("يرجى تعبئة كل الحقول وإضافة مرشحين على الأقل");
+      setError("يرجى تعبئة جميع الحقول وإضافة صورة انتخابات ومرشحين");
+      setSubmitting(false);
       return;
     }
-    setShowConfirm(true);
-  };
-
-  const confirmSubmit = async () => {
-    const newElection = { ...formData, candidates };
 
     try {
-      const res = await fetch("http://localhost:4000/elections", {
+      const electionImageUrl = await uploadFile(electionImage);
+
+      const candidatePayload: FormCandidatePayload[] = await Promise.all(
+        candidates.map(async (c) => {
+          if (!c.profileImage) throw new Error("يجب رفع صورة لكل مرشح");
+          const url = await uploadFile(c.profileImage);
+          return {
+            name: c.name,
+            party: c.party,
+            profile_image: url,
+          };
+        })
+      );
+
+      const res = await fetch(`${API_BASE}/elections`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newElection),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name,
+          description,
+          start_time: startTime,
+          end_time: endTime,
+          eligible_governorates: governorates,
+          candidates: candidatePayload,
+          election_image: electionImageUrl,
+          status: status,
+        }),
+        
       });
-      if (res.ok) navigate("/election/manage");
-      else setError("فشل في إنشاء الانتخابات");
-    } catch {
-      setError("حدث خطأ أثناء إرسال البيانات");
+
+      if (!res.ok) throw new Error("فشل في إنشاء الانتخابات");
+
+      navigate("/election/manage");
+    } catch (err: any) {
+      setError(err.message || "حدث خطأ");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const toggleGov = (g: string) => {
+    setGovernorates((prev) =>
+      prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]
+    );
+  };
+
+  const selectAllGovernorates = () => {
+    if (governorates.length === GOVERNORATES.length) {
+      setGovernorates([]);
+    } else {
+      setGovernorates([...GOVERNORATES]);
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-6 bg-white rounded-xl shadow-lg">
-      <h2 className="text-center text-2xl font-bold mb-4">إنشاء انتخابات</h2>
-      {error && <p className="text-red-600 text-center mb-4">{error}</p>}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          id="electionName"
-          value={formData.electionName}
-          onChange={handleInputChange}
-          className="w-full border px-4 py-2 rounded-lg"
-          placeholder="اسم الانتخابات"
-        />
-        <textarea
-          id="electionDescription"
-          value={formData.electionDescription}
-          onChange={handleInputChange}
-          className="w-full border px-4 py-2 rounded-lg"
-          placeholder="وصف الانتخابات"
-        />
-        <input
-          id="startTime"
-          type="datetime-local"
-          value={formData.startTime}
-          onChange={handleInputChange}
-          className="w-full border px-4 py-2 rounded-lg"
-        />
-        <input
-          id="endTime"
-          type="datetime-local"
-          value={formData.endTime}
-          onChange={handleInputChange}
-          className="w-full border px-4 py-2 rounded-lg"
-        />
-
-        <div>
-          <label className="block mb-2">المحافظات المؤهلة:</label>
-          <button
-            type="button"
-            className="bg-blue-500 text-white px-4 py-2 rounded mb-2"
-            onClick={() => setShowGovModal(true)}
-          >
-            اختيار المحافظات
-          </button>
-          <div className="text-gray-800">
-            {formData.eligibleGovernorates.join("، ")}
-          </div>
+    <div className="max-w-3xl mx-auto p-6 bg-white rounded-xl shadow-lg my-8">
+      <h2 className="text-3xl font-bold mb-6 text-center text-gray-800">
+        إنشاء انتخابات
+      </h2>
+      {error && (
+        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded">
+          <p className="text-center">{error}</p>
         </div>
+      )}
 
-        <div>
-          <h3 className="text-xl font-semibold mb-2">المرشحون</h3>
-          {candidates.map((c, i) => (
-            <div key={i} className="border p-4 mb-3 rounded-lg">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-gray-700 mb-2">اسم الانتخابات</label>
+            <input
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="اسم الانتخابات"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-gray-700 mb-2">وصف الانتخابات</label>
+            <textarea
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="وصف الانتخابات"
+              rows={4}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-2">وقت البدء</label>
               <input
-                placeholder="الاسم"
-                name="name"
-                value={c.name}
-                onChange={(e) => handleCandidateChange(e, i)}
-                className="w-full mb-2 px-2 py-1 border rounded"
+                type="datetime-local"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                required
               />
-              <textarea
-                placeholder="السيرة الذاتية"
-                name="bio"
-                value={c.bio}
-                onChange={(e) => handleCandidateChange(e, i)}
-                className="w-full mb-2 px-2 py-1 border rounded"
-              />
-              <input
-                placeholder="الحزب"
-                name="party"
-                value={c.party}
-                onChange={(e) => handleCandidateChange(e, i)}
-                className="w-full mb-2 px-2 py-1 border rounded"
-              />
-              <button
-                type="button"
-                className="text-red-600"
-                onClick={() => deleteCandidate(i)}
-              >
-                حذف
-              </button>
             </div>
-          ))}
-          <button
-            type="button"
-            onClick={addCandidate}
-            className="bg-green-500 text-white px-4 py-2 rounded"
-          >
-            إضافة مرشح
-          </button>
+            <div>
+              <label className="block text-gray-700 mb-2">وقت الانتهاء</label>
+              <input
+                type="datetime-local"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-gray-700 mb-2">صورة الانتخابات</label>
+            <div className="flex items-center space-x-4">
+              <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg border border-gray-300">
+                <span>اختر صورة</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) =>
+                    setElectionImage(e.target.files?.[0] || null)
+                  }
+                  required
+                />
+              </label>
+              {electionImage && (
+                <span className="text-green-600">{electionImage.name}</span>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-gray-700 mb-2">
+              المحافظات المؤهلة
+            </label>
+            <button
+              type="button"
+              className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-4 py-2 rounded-lg mb-2"
+              onClick={() => setShowGovModal(true)}
+            >
+              اختر المحافظات
+            </button>
+            {governorates.length > 0 ? (
+              <div className="bg-gray-100 p-3 rounded-lg">
+                <p className="text-gray-800">{governorates.join("، ")}</p>
+              </div>
+            ) : (
+              <p className="text-gray-500">لم يتم اختيار أي محافظات</p>
+            )}
+          </div>
+
+          <div className="border-t pt-4">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">
+              المرشحون
+            </h3>
+            {candidates.length === 0 && (
+              <p className="text-gray-500 mb-4">لا يوجد مرشحين مضافين</p>
+            )}
+
+            <div className="space-y-4">
+              {candidates.map((c, i) => (
+                <div
+                  key={i}
+                  className="border border-gray-200 p-4 rounded-lg bg-gray-50"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-gray-700 mb-1">الاسم</label>
+                      <input
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        placeholder="اسم المرشح"
+                        value={c.name}
+                        onChange={(e) =>
+                          handleCandidateChange(i, "name", e.target.value)
+                        }
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-700 mb-1">الحزب</label>
+                      <input
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        placeholder="الحزب"
+                        value={c.party}
+                        onChange={(e) =>
+                          handleCandidateChange(i, "party", e.target.value)
+                        }
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block text-gray-700 mb-1">
+                      صورة المرشح
+                    </label>
+                    <div className="flex items-center space-x-4">
+                      <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-lg border border-gray-300 text-sm">
+                        <span>اختر صورة</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) =>
+                            handleCandidateChange(
+                              i,
+                              "profileImage",
+                              e.target.files?.[0] || null
+                            )
+                          }
+                          required
+                        />
+                      </label>
+                      {c.profileImage && (
+                        <span className="text-sm text-green-600">
+                          {c.profileImage.name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="text-red-600 hover:text-red-800 text-sm"
+                    onClick={() =>
+                      setCandidates(candidates.filter((_, j) => j !== i))
+                    }
+                  >
+                    حذف المرشح
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setCandidates([
+                  ...candidates,
+                  { name: "", party: "", profileImage: null },
+                ])
+              }
+              className="mt-4 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
+            >
+              إضافة مرشح جديد
+            </button>
+          </div>
         </div>
 
         <button
           type="submit"
-          className="w-full bg-blue-600 text-white py-2 rounded-lg mt-4"
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition duration-200"
+          disabled={submitting}
         >
-          حفظ الانتخابات
+          {submitting ? (
+            <span className="flex items-center justify-center">
+              <svg
+                className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              جاري الحفظ...
+            </span>
+          ) : (
+            "حفظ الانتخابات"
+          )}
         </button>
       </form>
 
-      {/* Modal: Governorates */}
       {showGovModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg w-[400px] max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-bold mb-4">اختر المحافظات</h3>
-            <button
-              className="mb-3 bg-yellow-400 px-3 py-1 rounded text-sm"
-              onClick={selectAllGovs}
-            >
-              {formData.eligibleGovernorates.length === GOVERNORATES.length
-                ? "إلغاء تحديد الكل"
-                : "تحديد الكل"}
-            </button>
-            <div className="space-y-2">
-              {GOVERNORATES.map((gov) => (
-                <label key={gov} className="block">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-800">
+                اختر المحافظات
+              </h3>
+              <button
+                onClick={() => setShowGovModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={selectAllGovernorates}
+                className={`px-3 py-1 rounded-lg text-sm ${
+                  governorates.length === GOVERNORATES.length
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-200 hover:bg-gray-300 text-gray-800"
+                }`}
+              >
+                {governorates.length === GOVERNORATES.length
+                  ? "إلغاء اختيار الكل"
+                  : "اختيار الكل"}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {GOVERNORATES.map((g) => (
+                <label
+                  key={g}
+                  className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded-lg cursor-pointer"
+                >
                   <input
                     type="checkbox"
-                    checked={formData.eligibleGovernorates.includes(gov)}
-                    onChange={() => toggleGovernorate(gov)}
-                    className="mr-2"
+                    checked={governorates.includes(g)}
+                    onChange={() => toggleGov(g)}
+                    className="rounded text-blue-600 focus:ring-blue-500"
                   />
-                  {gov}
+                  <span className="text-gray-800">{g}</span>
                 </label>
               ))}
             </div>
-            <div className="mt-4 text-right">
+
+            <div className="mt-6">
               <button
                 onClick={() => setShowGovModal(false)}
-                className="bg-blue-500 text-white px-4 py-2 rounded"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg"
               >
-                حفظ
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Confirmation */}
-      {showConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg w-[90%] max-w-xl">
-            <h2 className="text-xl font-bold mb-4">تأكيد البيانات</h2>
-            <p>
-              <strong>الاسم:</strong> {formData.electionName}
-            </p>
-            <p>
-              <strong>الوصف:</strong> {formData.electionDescription}
-            </p>
-            <p>
-              <strong>المدة:</strong> {formData.startTime} → {formData.endTime}
-            </p>
-            <p>
-              <strong>المحافظات:</strong>{" "}
-              {formData.eligibleGovernorates.join(", ")}
-            </p>
-            <p>
-              <strong>عدد المرشحين:</strong> {candidates.length}
-            </p>
-            <div className="mt-4 flex justify-between">
-              <button
-                onClick={() => setShowConfirm(false)}
-                className="bg-gray-300 px-4 py-2 rounded"
-              >
-                إلغاء
-              </button>
-              <button
-                onClick={confirmSubmit}
-                className="bg-green-600 text-white px-6 py-2 rounded"
-              >
-                تأكيد
+                تم الاختيار
               </button>
             </div>
           </div>
