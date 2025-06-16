@@ -1,4 +1,10 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import {
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import CreateElection from "./pages/CreateElection";
 import ManageElection from "./pages/ManageElection";
@@ -14,9 +20,32 @@ import { useAuth } from "./context/AuthContext";
 import TallyVerification from "./pages/TallyVerification";
 import VoterActivityLog from "./pages/VoterActivityLog";
 // import SecurityAlerts from "./pages/SecurityAlerts";
+import { useEffect } from "react";
 
 function App() {
   const { isLoggedIn, isAuthorized, role } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Save current route to localStorage when it changes
+  useEffect(() => {
+    if (isLoggedIn && isAuthorized) {
+      localStorage.setItem("last_route", location.pathname + location.search);
+    }
+  }, [location, isLoggedIn, isAuthorized]);
+
+  // Redirect to last route after login/authorization
+  useEffect(() => {
+    if (isLoggedIn && isAuthorized) {
+      const lastRoute = localStorage.getItem("last_route");
+      if (
+        lastRoute &&
+        lastRoute !== window.location.pathname + window.location.search
+      ) {
+        navigate(lastRoute, { replace: true });
+      }
+    }
+  }, [isLoggedIn, isAuthorized, navigate]);
 
   if (!isLoggedIn) {
     return (

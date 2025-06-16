@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import API_BASE from "../assets/glob";
+
 const GOVERNORATES = [
   "القاهرة",
   "الجيزة",
@@ -32,19 +33,25 @@ const GOVERNORATES = [
   "سوهاج",
 ];
 
+interface FormErrors {
+  nationalId?: string;
+  phone?: string;
+  governorate?: string;
+  invitationCode?: string;
+}
+
 const RegisterPage = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [errors, setErrors] = useState<FormErrors>({});
 
   const [nationalId, setNationalId] = useState("");
   const [phone, setPhone] = useState("");
   const [governorate, setGovernorate] = useState("");
   const [invitationCode, setInvitationCode] = useState("");
-  const [frontImage, setFrontImage] = useState<File | null>(null);
-  const [backImage, setBackImage] = useState<File | null>(null);
-  const [selfieImage, setSelfieImage] = useState<File | null>(null);
+  const [password, setpassword] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -54,39 +61,61 @@ const RegisterPage = () => {
     }
   }, []);
 
-  // const API = "http://192.168.1.6:3000"; // Your local API
+  const validateNationalId = (id: string): boolean => {
+    const nationalIdRegex = /^[23]\d{13}$/;
+    return nationalIdRegex.test(id);
+  };
 
-  const uploadFile = async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append("file", file);
+  const validatePhone = (phone: string): boolean => {
+    const phoneRegex = /^0\d{10}$/;
+    return phoneRegex.test(phone);
+  };
 
-    const response = await fetch(`${API_BASE}/uploads`, {
-      method: "POST",
-      body: formData,
-    });
+  const validateForm = (): boolean => {
+    const newErrors: FormErrors = {};
+    let isValid = true;
 
-    const data = await response.json();
-    if (!response.ok)
-      throw new Error(data.message || data.error || "خطا في رفع الصور");
-    return data.url;
+    if (!nationalId) {
+      newErrors.nationalId = "الرقم القومي مطلوب";
+      isValid = false;
+    } else if (!validateNationalId(nationalId)) {
+      newErrors.nationalId = "الرقم القومي يجب أن يكون 14 رقم ويبدأ بـ 2 أو 3";
+      isValid = false;
+    }
+
+    if (!phone) {
+      newErrors.phone = "رقم الهاتف مطلوب";
+      isValid = false;
+    } else if (!validatePhone(phone)) {
+      newErrors.phone = "رقم الهاتف يجب أن يكون 11 رقم ويبدأ بـ 0";
+      isValid = false;
+    }
+
+    if (!governorate) {
+      newErrors.governorate = "يرجى اختيار المحافظة";
+      isValid = false;
+    }
+
+    if (!invitationCode) {
+      newErrors.invitationCode = "كود الدعوة مطلوب";
+      isValid = false;
+    }
+
+    setErrors(newErrors);
+    return isValid;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
+    localStorage.setItem("password", password);
+
+    if (!validateForm()) {
+      setLoading(false);
+      return;
+    }
 
     try {
-      // Upload images
-      const [frontUrl, backUrl, selfieUrl] = await Promise.all([
-        frontImage ? uploadFile(frontImage) : Promise.reject("الوجه غير موجود"),
-        backImage ? uploadFile(backImage) : Promise.reject("الظهر غير موجود"),
-        selfieImage
-          ? uploadFile(selfieImage)
-          : Promise.reject("السيلفي غير موجود"),
-      ]);
-
-      // Send registration request
       const registerResponse = await fetch(`${API_BASE}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -95,9 +124,6 @@ const RegisterPage = () => {
           phone,
           governorate,
           invitation_code: invitationCode,
-          photo_id_front: frontUrl,
-          photo_id_back: backUrl,
-          face_selfie: selfieUrl,
         }),
       });
 
@@ -107,15 +133,20 @@ const RegisterPage = () => {
         throw new Error(result.message || result.error || "فشل التسجيل");
       }
 
-      // Store credentials
       localStorage.setItem("access_token", result.access_token);
       localStorage.setItem("certificate", result.certificate);
       localStorage.setItem("private_key", result.private_key);
+      localStorage.setItem("user_id", result.user_id);
+      localStorage.setItem("password", password);
 
       login();
       navigate("/");
-    } catch (err: any) {
-      setError(err.message || "حدث خطأ");
+    } catch (error) {
+      if (error instanceof Error) {
+        setFormError(error.message);
+      } else {
+        setFormError("حدث خطأ غير متوقع");
+      }
     } finally {
       setLoading(false);
     }
@@ -139,17 +170,15 @@ const RegisterPage = () => {
           onSubmit={handleSubmit}
           className="bg-white/60 backdrop-blur-sm rounded-xl shadow-xl p-8 space-y-6"
         >
-          {error && (
-            <div className="text-red-600 text-center font-semibold">
-              {error}
-            </div>
-          )}
-
           <div className="text-center">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">EGY Vote</h1>
             <p className="text-gray-600">سجل حساب جديد</p>
           </div>
-
+          {formError && (
+            <div className="bg-red-100 text-red-700 p-3 rounded text-sm text-center">
+              {formError}
+            </div>
+          )}  
           <div className="space-y-4">
             <div>
               <label htmlFor="national_id" className="block text-lg mb-2">
@@ -159,10 +188,22 @@ const RegisterPage = () => {
                 type="text"
                 id="national_id"
                 required
-                className="w-full px-4 py-2 border border-black-300 rounded-lg"
+                pattern="[23]\d{13}"
+                title="يجب أن يبدأ الرقم القومي بـ 2 أو 3 ويتكون من 14 رقم"
+                className={`w-full px-4 py-2 border rounded-lg ${
+                  errors.nationalId ? "border-red-500" : "border-black-300"
+                }`}
                 value={nationalId}
-                onChange={(e) => setNationalId(e.target.value)}
+                onChange={(e) => {
+                  setNationalId(e.target.value);
+                  setErrors({ ...errors, nationalId: undefined });
+                  setFormError(null);
+                }}
+                placeholder="الرقم القومي (14 رقم)"
               />
+              {errors.nationalId && (
+                <p className="text-red-500 text-sm mt-1">{errors.nationalId}</p>
+              )}
             </div>
 
             <div>
@@ -173,10 +214,19 @@ const RegisterPage = () => {
                 type="text"
                 id="phone"
                 required
+                pattern="0\d{10}"
+                title="يجب أن يبدأ رقم الهاتف بـ 0 ويتكون من 11 رقم"
                 className="w-full px-4 py-2 border border-black-300 rounded-lg"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  setErrors({ ...errors, phone: undefined });
+                }}
+                placeholder="رقم الهاتف (يبدأ بـ 0)"
               />
+              {errors.phone && (
+                <p className="text-red-500 text-sm mt-1">{errors.phone}</p>
+              )}
             </div>
 
             <div>
@@ -186,9 +236,14 @@ const RegisterPage = () => {
               <select
                 id="governorate"
                 required
-                className="w-full px-4 py-2 border border-black-300 rounded-lg"
+                className={`w-full px-4 py-2 border rounded-lg ${
+                  errors.governorate ? "border-red-500" : "border-black-300"
+                }`}
                 value={governorate}
-                onChange={(e) => setGovernorate(e.target.value)}
+                onChange={(e) => {
+                  setGovernorate(e.target.value);
+                  setErrors({ ...errors, governorate: undefined });
+                }}
               >
                 <option value="" disabled>
                   اختر المحافظة
@@ -199,60 +254,52 @@ const RegisterPage = () => {
                   </option>
                 ))}
               </select>
+              {errors.governorate && (
+                <p className="text-red-500 text-sm mt-1">
+                  {errors.governorate}
+                </p>
+              )}
             </div>
 
             <div>
               <label htmlFor="invitationCode" className="block text-lg mb-2">
-                كود الدعوة (اختياري)
+                كود الدعوة
               </label>
               <input
                 type="text"
                 id="invitationCode"
-                className="w-full px-4 py-2 border border-black-300 rounded-lg"
+                required
+                className={`w-full px-4 py-2 border rounded-lg ${
+                  errors.invitationCode ? "border-red-500" : "border-black-300"
+                }`}
                 value={invitationCode}
-                onChange={(e) => setInvitationCode(e.target.value)}
+                onChange={(e) => {
+                  setInvitationCode(e.target.value);
+                  setErrors({ ...errors, invitationCode: undefined });
+                }}
+                placeholder="أدخل كود الدعوة"
               />
+              {errors.invitationCode && (
+                <p className="text-red-500 text-sm mt-1">
+                  {errors.invitationCode}
+                </p>
+              )}
             </div>
-
             <div>
-              <label htmlFor="frontImage" className="block text-lg mb-2">
-                صورة البطاقة (الوجه الأمامي)
+              <label htmlFor="invitationCode" className="block text-lg mb-2">
+                كلمة السر
               </label>
               <input
-                type="file"
-                id="frontImage"
-                accept="image/*"
+                type="password"
+                id="password"
                 required
-                className="w-full px-4 py-2 border border-black-300 rounded-lg"
-                onChange={(e) => setFrontImage(e.target.files?.[0] || null)}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="backImage" className="block text-lg mb-2">
-                صورة البطاقة (الوجه الخلفي)
-              </label>
-              <input
-                type="file"
-                id="backImage"
-                accept="image/*"
-                required
-                className="w-full px-4 py-2 border border-black-300 rounded-lg"
-                onChange={(e) => setBackImage(e.target.files?.[0] || null)}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="selfieImage" className="block text-lg mb-2">
-                صورة شخصية مع البطاقة
-              </label>
-              <input
-                type="file"
-                id="selfieImage"
-                accept="image/*"
-                required
-                className="w-full px-4 py-2 border border-black-300 rounded-lg"
-                onChange={(e) => setSelfieImage(e.target.files?.[0] || null)}
+                className={`w-full px-4 py-2 border rounded-lg`}
+                placeholder="password"
+                value={password}
+                onChange={(e) => {
+                  setpassword(e.target.value);
+                  console.log(password);
+                }}
               />
             </div>
           </div>

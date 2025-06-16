@@ -6,7 +6,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  CartesianGrid,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -48,6 +47,8 @@ const CurrentElection: React.FC = () => {
   const { logout } = useAuth();
 
   useEffect(() => {
+    let liveTallyInterval: any;
+
     const fetchElection = async () => {
       try {
         const res = await fetch(`${API_BASE}/elections/${id}`, {
@@ -81,6 +82,7 @@ const CurrentElection: React.FC = () => {
         setError("تعذر تحميل تحليلات الانتخابات");
       }
     };
+
     const fetchTally = async () => {
       try {
         const res = await fetch(`${API_BASE}/elections/${id}/tally`, {
@@ -97,72 +99,25 @@ const CurrentElection: React.FC = () => {
         console.error("تعذر تحميل بيانات التصويت اللحظي");
       }
     };
+
+    // Initial fetches
     fetchElection();
-    fetchTally();
     fetchAnalytics();
-    // setAnalysis({
-    //   election_id: "string",
-    //   total_votes: 1000,
-    //   candidate_votes: [
-    //     { candidate_id: "أحمد علي", votes: 500 },
-    //     { candidate_id: "سارة محمد", votes: 300 },
-    //   ],
-    //   voter_demographics: {
-    //     age_groups: {
-    //       "18-24": 200,
-    //       "25-34": 300,
-    //       "35-44": 250,
-    //       "45-54": 150,
-    //       "55+": 100,
-    //     },
-    //   },
-    //   voter_locations: {
-    //     القاهرة: 400,
-    //     الجيزة: 300,
-    //     الإسكندرية: 200,
-    //     أسوان: 100,
-    //   },
-    //   voter_turnout: {
-    //     total_registered: 5000,
-    //     total_voted: 1000,
-    //     turnout_rate: 20.0,
-    //   },
-    //   voter_feedback: {
-    //     positive: 800,
-    //     neutral: 150,
-    //     negative: 50,
-    //   },
-    // });
+    fetchTally();
 
-    // // MOCK ELECTION
-    // setElection({
-    //   election_id: "1",
-    //   name: "الانتخابات الرئاسية",
-    //   election_image: "https://via.placeholder.com/150",
-    //   candidates: [
-    //     {
-    //       name: "أحمد علي",
-    //       bio: "مرشح مستقل",
-    //       party: "مستقل",
-    //       profile_image: "none",
-    //     },
-    //     {
-    //       name: "سارة محمد",
-    //       bio: "حزب العدالة",
-    //       party: "العدالة",
-    //       profile_image: "none",
-    //     },
-    //   ],
-    //   start_time: new Date().toISOString(),
-    //   end_time: new Date(Date.now() + 86400000).toISOString(),
-    //   description: "وصف تجريبي للانتخابات الحالية.",
-    //   eligible_governorates: ["القاهرة", "الجيزة", "الإسكندرية"],
-    //   status: "active",
-    // });
-  }, [id]);
+    // Live election polling
+    if (election?.status === "live") {
+      liveTallyInterval = setInterval(() => {
+        fetchTally();
+      }, 10000);
+    }
 
+    // Cleanup function
+    return () => {
+      if (liveTallyInterval) clearInterval(liveTallyInterval);
+    };
+  }, [id, election?.status]);
 
-  
   const formatDate = (isoDate: string) =>
     new Date(isoDate).toLocaleString("ar-EG");
 
@@ -270,6 +225,39 @@ const CurrentElection: React.FC = () => {
 
           {analysis && (
             <div className="space-y-10 mt-10">
+              <div className="text-center mb-4">
+                <button
+                  onClick={() => {
+                    setError(null);
+                    setAnalysis(null);
+                    console.log("here");
+                    // re-fetch analysis
+                    fetch(
+                      `${API_BASE}/elections/${id}/analytics?forceRefresh=true`,
+                      {
+                        method: "GET",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${token}`,
+                        },
+                      }
+                    )
+                      .then((res) => {
+                        handleApiError(res, logout);
+                        return res.json();
+                      })
+                      .then((data) => {
+                        console.log("here");
+                        setAnalysis(data);
+                      })
+                      .catch(() => setError("تعذر تحميل تحليلات الانتخابات"));
+                  }}
+                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-700"
+                >
+                  إعادة تحميل التحليل
+                </button>
+              </div>
+
               <h2 className="text-2xl font-bold text-center mb-6">
                 تحليلات التصويت
               </h2>

@@ -21,20 +21,20 @@ type ChaincodeEvent = {
   event_type: EventType;
   details: Record<string, any>;
 };
-function translateAuditEventTypeToArabic(eventType: EventType | ""): string {
-  const translations: Record<string, string> = {
-    vote_cast: "تصويت",
-    election_created: "إنشاء انتخابات",
-    election_updated: "تحديث بيانات الانتخابات",
-    tally_computed: "حساب نتائج التصويت",
-    user_registered: "تسجيل مستخدم جديد",
-    user_status_updated: "تحديث حالة المستخدم",
-    election_status_changed: "تغيير حالة الانتخابات",
-    "": "الكل", // For empty selection (i.e., "All")
-  };
+// function translateAuditEventTypeToArabic(eventType: EventType | ""): string {
+//   const translations: Record<string, string> = {
+//     vote_cast: "تصويت",
+//     election_created: "إنشاء انتخابات",
+//     election_updated: "تحديث بيانات الانتخابات",
+//     tally_computed: "حساب نتائج التصويت",
+//     user_registered: "تسجيل مستخدم جديد",
+//     user_status_updated: "تحديث حالة المستخدم",
+//     election_status_changed: "تغيير حالة الانتخابات",
+//     "": "الكل", // For empty selection (i.e., "All")
+//   };
 
-  return translations[eventType] || "حدث غير معروف";
-}
+//   return translations[eventType] || "حدث غير معروف";
+// }
 
 const EVENT_OPTIONS: { label: string; value: EventType | "" }[] = [
   { label: "الكل", value: "" },
@@ -78,9 +78,8 @@ const ChainCodeEvents = () => {
           },
         }
       );
-
-      if (!res.ok) throw new Error("فشل في جلب الأحداث");
       handleApiError(res, logout);
+      if (!res.ok) throw new Error("فشل في جلب الأحداث");
       const data = await res.json();
       setEvents(data.events || []);
     } catch (err: any) {

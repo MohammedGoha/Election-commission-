@@ -34,7 +34,10 @@ export function translateDetailKeyToArabic(key: string): string {
     phone: 'رقم الهاتف',
     timestamp: 'التوقيت',
     tx_id: 'معرف المعاملة',
-    block_number: 'رقم الكتلة'
+    block_number: 'رقم الكتلة',
+    vote_id: 'رقم الصور',
+    receipt : 'ايصال',
+    status:'الحاله',
   };
 
   return translations[key] || key;

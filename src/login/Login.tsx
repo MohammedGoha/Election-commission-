@@ -1,63 +1,130 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import API_BASE from "../assets/glob";
 import { useAuth } from "../context/AuthContext";
-export default function LoginPage(props: any) {
-  const [phone, setPhone] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+
+export default function LoginPage() {
   const { login } = useAuth();
-  // On mount: check if private key exists but access token is missing/expired
-  useEffect(() => {
-    const privateKey = localStorage.getItem("private_key");
-    const accessToken = localStorage.getItem("access_token");
+  const [error, setError] = useState<string | null | boolean>(null);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [step, setStep] = useState<"enter-password" | "logging-in">(
+    "enter-password"
+  );
 
-    // Optional: check if token is expired (here we just check presence)
-
-    if (!accessToken && privateKey) {
-      // Let user log in with phone to get new access token
-    } else if (accessToken && privateKey) {
-      // props.getMeIn(); // Already logged in
-      login();
+  const handlePasswordSubmit = () => {
+    const storedPassword = localStorage.getItem("password");
+    if (!storedPassword) {
+      setError("لم يتم العثور على كلمة المرور. الرجاء التسجيل أولاً.");
+      return;
     }
-  }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(false);
+    if (passwordInput !== storedPassword) {
+      setError("كلمة المرور غير صحيحة.");
+      return;
+    }
+
+    // Proceed to login if password is correct
+    setStep("logging-in");
+    setError(null);
+    loginWithChallenge();
+  };
+
+  const loginWithChallenge = async () => {
+    const userId = localStorage.getItem("user_id");
+    const privateKeyPem = localStorage.getItem("private_key");
+
+    if (!userId || !privateKeyPem) {
+      setError("البيانات مفقودة. الرجاء التسجيل أولاً.");
+      return;
+    }
 
     try {
-      const response = await fetch(`${API_BASE}/auth/login`, {
+      // Step 1: Get challenge
+      const challengeRes = await fetch(`${API_BASE}/auth/login/challenge`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ phoneNumber: phone }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId }),
       });
 
-      if (!response.ok) throw new Error("Failed to login");
-
-      const data = await response.json();
-
-      if (data.access_token) {
-        localStorage.setItem("access_token", data.access_token);
-        // props.getMeIn(); // Navigate into app
-        login();
-      } else {
-        throw new Error("No access token returned");
+      if (!challengeRes.ok) {
+        throw new Error("فشل في طلب التحدي");
       }
-    } catch (err) {
-      console.log(err);
-      setError(true);
-      setLoading(false);
+
+      const { challenge } = await challengeRes.json();
+
+      // Step 2: Import private key
+      const importedKey = await importPrivateKey(privateKeyPem);
+
+      // Step 3: Sign the challenge
+      const challengeBytes = hexToUint8Array(challenge);
+      const hash = await crypto.subtle.digest("SHA-256", challengeBytes);
+      const signatureBuffer = await crypto.subtle.sign(
+        { name: "ECDSA", hash: { name: "SHA-256" } },
+        importedKey,
+        hash
+      );
+
+      const signatureBase64 = btoa(
+        String.fromCharCode(...new Uint8Array(signatureBuffer))
+      );
+
+      // Step 4: Send signed challenge
+      const verifyRes = await fetch(`${API_BASE}/auth/login/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: userId,
+          challenge,
+          signature: signatureBase64,
+        }),
+      });
+
+      if (!verifyRes.ok) {
+        throw new Error("فشل التحقق من التحدي");
+      }
+
+      const { access_token } = await verifyRes.json();
+      localStorage.setItem("access_token", access_token);
+      login();
+    } catch (err: any) {
+      setError(err.message || "فشل تسجيل الدخول");
+      console.error(err);
+      setStep("enter-password");
     }
   };
 
-  if (error)
+  const importPrivateKey = async (pem: string) => {
+    const pemBody = pem
+      .replace(/-----BEGIN PRIVATE KEY-----/, "")
+      .replace(/-----END PRIVATE KEY-----/, "")
+      .replace(/\s+/g, "");
+    const binary = atob(pemBody);
+    const binaryArray = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    return await crypto.subtle.importKey(
+      "pkcs8",
+      binaryArray.buffer,
+      {
+        name: "ECDSA",
+        namedCurve: "P-256",
+        hash: { name: "SHA-256" },
+      },
+      true,
+      ["sign"]
+    );
+  };
+
+  const hexToUint8Array = (hex: string): Uint8Array => {
+    const matches = hex.match(/.{1,2}/g);
+    return matches
+      ? new Uint8Array(matches.map((b) => parseInt(b, 16)))
+      : new Uint8Array();
+  };
+
+  if (error) {
     setTimeout(() => {
       setError(false);
       console.log(error);
     }, 5000);
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center relative">
@@ -73,13 +140,10 @@ export default function LoginPage(props: any) {
       </div>
 
       <div className="relative z-10 w-full max-w-md px-4">
-        <form
-          onSubmit={handleSubmit}
-          className="bg-white/60 backdrop-blur-sm rounded-xl shadow-xl p-8 space-y-6"
-        >
+        <div className="bg-white/60 backdrop-blur-sm rounded-xl shadow-xl p-8 space-y-6">
           {error && (
             <div className="text-red-600 text-center font-semibold">
-              فشل تسجيل الدخول. تأكد من صحة الرقم.
+              {error}
             </div>
           )}
 
@@ -88,32 +152,40 @@ export default function LoginPage(props: any) {
             <p className="text-gray-600">سجل الدخول للمتابعة</p>
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="phone" className="block text-lg mb-2">
-                رقم الهاتف
-              </label>
-              <input
-                type="text"
-                id="phone"
-                required
-                className="w-full px-4 py-2 border border-black-300 rounded-lg"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </div>
-          </div>
+          {step === "enter-password" && (
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="password" className="block text-lg mb-2">
+                  كلمة المرور
+                </label>
+                <input
+                  type="password"
+                  id="password"
+                  required
+                  className="w-full px-4 py-2 border border-black-300 rounded-lg"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                />
+              </div>
 
-          <button
-            type="submit"
-            className="w-full flex justify-center py-2 px-4 border border-transparent
-                     rounded-md shadow-sm text-sm font-medium text-white bg-gray-900
-                     hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2
-                     focus:ring-gray-500 transition-colors"
-          >
-            {loading ? "جاري التحقق..." : "دخول"}
-          </button>
-        </form>
+              <button
+                onClick={handlePasswordSubmit}
+                className="w-full flex justify-center py-2 px-4 border border-transparent
+                         rounded-md shadow-sm text-sm font-medium text-white bg-gray-900
+                         hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2
+                         focus:ring-gray-500 transition-colors"
+              >
+                تحقق من كلمة المرور
+              </button>
+            </div>
+          )}
+
+          {step === "logging-in" && (
+            <div className="text-center py-4">
+              <p className="text-gray-700 font-medium">جاري تسجيل الدخول...</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import API_BASE from "../assets/glob";
 import { handleApiError } from "../utils/handleApiError";
 import { useAuth } from "../context/AuthContext";
-const token = localStorage.getItem("access_token");
 
 const UsersManagement = () => {
   const [tab, setTab] = useState<
@@ -68,6 +67,7 @@ const UserList = () => {
   const [status, setStatus] = useState("");
   const [governorate, setGovernorate] = useState("");
   const { logout } = useAuth();
+  const token = localStorage.getItem("access_token");
 
   const GOVERNORATES = [
     "القاهرة",
@@ -118,7 +118,9 @@ const UserList = () => {
         Authorization: `Bearer ${token}`,
       },
     });
+    console.log("token", token);
     handleApiError(res, logout);
+
     const data = await res.json();
     setUsers(data);
   };
@@ -183,7 +185,7 @@ const UserList = () => {
             className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="font-medium text-gray-700">🆔 {u.user_id}</span>
+              <span className="font-medium text-gray-700"> {u.user_id}</span>
               <span
                 className={`px-2 py-1 text-xs rounded-full ${
                   u.status === "active"
@@ -269,6 +271,7 @@ const RevokeUser = () => {
   const [msg, setMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { logout } = useAuth();
+  const token = localStorage.getItem("access_token");
 
   const revoke = async () => {
     setIsLoading(true);
@@ -350,9 +353,11 @@ const RevokeUser = () => {
 // ----------------------- Revocation History -----------------------
 
 const RevocationHistory = () => {
-  const [history, setHistory] = useState([]);
+  const [history, setHistory] = useState<any[]>([]);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { logout } = useAuth();
+  const token = localStorage.getItem("access_token");
 
   const fetchHistory = async () => {
     setIsLoading(true);
@@ -377,8 +382,12 @@ const RevocationHistory = () => {
     fetchHistory();
   }, []);
 
+  const toggleExpanded = (id: string) => {
+    setExpanded((prev) => (prev === id ? null : id));
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 max-w-4xl mx-auto">
       <h2 className="text-2xl font-semibold text-gray-700 border-b pb-2">
         سجل الإلغاءات
       </h2>
@@ -387,54 +396,8 @@ const RevocationHistory = () => {
         <div className="flex justify-center items-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    المستخدم
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    السبب
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    التاريخ
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    بواسطة
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {history.map((r: any) => (
-                  <tr
-                    key={r.timestamp}
-                    className="hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {r.user_id}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {r.reason}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(r.timestamp).toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {r.revoked_by}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {!isLoading && history.length === 0 && (
-        <div className="bg-gray-50 p-8 text-center rounded-lg">
+      ) : history.length === 0 ? (
+        <div className="bg-gray-50 p-8 text-center rounded-lg border border-gray-200">
           <svg
             className="mx-auto h-12 w-12 text-gray-400"
             fill="none"
@@ -454,6 +417,59 @@ const RevocationHistory = () => {
           <p className="mt-1 text-gray-500">
             لم يتم إلغاء أي مستخدمين حتى الآن
           </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {history.map((r) => (
+            <div
+              key={r.timestamp}
+              className="border border-gray-300 bg-white rounded-lg shadow-sm transition"
+            >
+              <button
+                onClick={() => toggleExpanded(r.timestamp)}
+                className="w-full text-right p-4 flex justify-between items-center focus:outline-none hover:bg-gray-50"
+              >
+                <div className="text-right">
+                  <div className="font-semibold text-gray-800">{r.user_id}</div>
+                  <div className="text-sm text-gray-500">
+                    بتاريخ: {new Date(r.timestamp).toLocaleString()}
+                  </div>
+                </div>
+                <div className="text-sm text-blue-600 font-medium">
+                  {expanded === r.timestamp ? "▲" : "▼"}
+                </div>
+              </button>
+
+              {expanded === r.timestamp && (
+                <div className="bg-gray-50 px-6 py-4 border-t text-sm text-gray-700">
+                  <table className="table-auto w-full text-right rtl space-y-2">
+                    <tbody>
+                      <tr className="border-b">
+                        <td className="font-semibold py-2 w-1/4">المستخدم:</td>
+                        <td className="py-2 break-all">{r.user_id}</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="font-semibold py-2">السبب:</td>
+                        <td className="py-2 whitespace-pre-wrap">{r.reason}</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="font-semibold py-2">التاريخ:</td>
+                        <td className="py-2">
+                          {new Date(r.timestamp).toLocaleString()}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="font-semibold py-2">
+                          تم الإلغاء بواسطة:
+                        </td>
+                        <td className="py-2">{r.revoked_by}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

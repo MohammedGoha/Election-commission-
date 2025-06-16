@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API_BASE from "../assets/glob";
 const GOVERNORATES = [
@@ -34,12 +34,14 @@ const GOVERNORATES = [
 type Candidate = {
   name: string;
   party: string;
+  description: string;
   profileImage: File | null;
 };
 
 type FormCandidatePayload = {
   name: string;
   party: string;
+  description: string;
   profile_image: string;
 };
 
@@ -58,6 +60,10 @@ const CreateElection = () => {
   const status = "compeleted";
   const token = localStorage.getItem("access_token");
   // const API = "http://192.168.1.3:3000/api/v1";
+  // Add this state at the top of your component
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  // Replace the window.confirm section with:
 
   const uploadFile = async (file: File): Promise<string> => {
     const form = new FormData();
@@ -125,6 +131,22 @@ const CreateElection = () => {
       return;
     }
 
+    // Validate candidates
+    const missingFields = candidates.some(
+      (c) => !c.name || !c.party || !c.description || !c.profileImage
+    );
+    if (missingFields) {
+      setError("يرجى تعبئة جميع بيانات المرشحين (الاسم، الحزب، الوصف، الصورة)");
+      setSubmitting(false);
+      return;
+    }
+
+    if (!showConfirmModal) {
+      setShowConfirmModal(true);
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const electionImageUrl = await uploadFile(electionImage);
 
@@ -135,6 +157,7 @@ const CreateElection = () => {
           return {
             name: c.name,
             party: c.party,
+            description: c.description,
             profile_image: url,
           };
         })
@@ -156,14 +179,13 @@ const CreateElection = () => {
           election_image: electionImageUrl,
           status: status,
         }),
-        
       });
 
       if (!res.ok) throw new Error("فشل في إنشاء الانتخابات");
 
       navigate("/election/manage");
-    } catch (err: any) {
-      setError(err.message || "حدث خطأ");
+    } catch (err: Error | unknown) {
+      setError(err instanceof Error ? err.message : "حدث خطأ");
     } finally {
       setSubmitting(false);
     }
@@ -325,6 +347,22 @@ const CreateElection = () => {
 
                   <div className="mb-4">
                     <label className="block text-gray-700 mb-1">
+                      وصف المرشح
+                    </label>
+                    <textarea
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                      placeholder="وصف المرشح"
+                      rows={3}
+                      value={c.description}
+                      onChange={(e) =>
+                        handleCandidateChange(i, "description", e.target.value)
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block text-gray-700 mb-1">
                       صورة المرشح
                     </label>
                     <div className="flex items-center space-x-4">
@@ -370,7 +408,7 @@ const CreateElection = () => {
               onClick={() =>
                 setCandidates([
                   ...candidates,
-                  { name: "", party: "", profileImage: null },
+                  { name: "", party: "", description: "", profileImage: null },
                 ])
               }
               className="mt-4 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
@@ -482,6 +520,117 @@ const CreateElection = () => {
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg"
               >
                 تم الاختيار
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-lg w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-800">
+                تأكيد إنشاء الانتخابات
+              </h3>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-gray-700 mb-4">
+                هل أنت متأكد من إنشاء هذه الانتخابات؟
+              </p>
+              <div className="bg-gray-100 p-4 rounded-lg">
+                <p className="font-medium text-gray-800">{name}</p>
+                <p className="text-sm text-gray-600">
+                  من {new Date(startTime).toLocaleString()} إلى{" "}
+                  {new Date(endTime).toLocaleString()}
+                </p>
+                <p className="text-sm text-gray-600 mt-2">
+                  {governorates.length} محافظة مؤهلة
+                </p>
+                <p className="text-sm text-gray-600">
+                  {candidates.length} مرشح
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={async () => {
+                  setShowConfirmModal(false);
+                  setSubmitting(true);
+                  try {
+                    const electionImageUrl = await uploadFile(electionImage!);
+
+                    const candidatePayload: FormCandidatePayload[] =
+                      await Promise.all(
+                        candidates.map(async (c) => {
+                          if (!c.profileImage)
+                            throw new Error("يجب رفع صورة لكل مرشح");
+                          const url = await uploadFile(c.profileImage);
+                          return {
+                            name: c.name,
+                            party: c.party,
+                            description: c.description,
+                            profile_image: url,
+                          };
+                        })
+                      );
+
+                    const res = await fetch(`${API_BASE}/elections`, {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                      },
+                      body: JSON.stringify({
+                        name,
+                        description,
+                        start_time: startTime,
+                        end_time: endTime,
+                        eligible_governorates: governorates,
+                        candidates: candidatePayload,
+                        election_image: electionImageUrl,
+                        status: status,
+                      }),
+                    });
+
+                    if (!res.ok) throw new Error("فشل في إنشاء الانتخابات");
+
+                    navigate("/election/manage");
+                  } catch (err: Error | unknown) {
+                    setError(err instanceof Error ? err.message : "حدث خطأ");
+                    setSubmitting(false);
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                تأكيد الإنشاء
               </button>
             </div>
           </div>

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import API_BASE from "../assets/glob";
 import { useAuth } from "../context/AuthContext";
 import { handleApiError } from "../utils/handleApiError";
+
 type Candidate =
   | string
   | {
@@ -28,8 +29,6 @@ type Election = {
 
 const ManageElection = () => {
   const [elections, setElections] = useState<Election[]>([]);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
-  const [disabling, setDisabling] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -50,10 +49,6 @@ const ManageElection = () => {
         },
       });
 
-      // if (res.status === 401) {
-      //   logout();
-      //   return;
-      // }
       handleApiError(res, logout);
       if (!res.ok) {
         throw new Error("Failed to fetch elections");
@@ -114,30 +109,10 @@ const ManageElection = () => {
     }
   };
 
-  const handleDisable = async (id: string) => {
-    try {
-      setDisabling(id);
-      const token = localStorage.getItem("access_token");
-
-      const response = await fetch(`${API_BASE}/elections/${id}/cancel`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to disable election");
-      }
-
-      await fetchElections(); // Refresh the elections list
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to disable election"
-      );
-    } finally {
-      setDisabling(null);
+  const handleElectionClick = (election: Election) => {
+    // Only allow navigation for non-scheduled elections
+    if (election.status !== "scheduled") {
+      navigate(`/currentElection/${election.election_id}`);
     }
   };
 
@@ -172,8 +147,12 @@ const ManageElection = () => {
       {elections.map((election) => (
         <div
           key={election.election_id}
-          className={`p-6 rounded-xl shadow-lg border border-gray-200 bg-white cursor-pointer hover:bg-gray-50 transition-colors`}
-          onClick={() => navigate(`/currentElection/${election.election_id}`)}
+          className={`p-6 rounded-xl shadow-lg border border-gray-200 bg-white ${
+            election.status !== "scheduled"
+              ? "cursor-pointer hover:bg-gray-50"
+              : ""
+          } transition-colors`}
+          onClick={() => handleElectionClick(election)}
         >
           <div className="flex justify-between items-start mb-4">
             <div>
@@ -224,23 +203,10 @@ const ManageElection = () => {
           </div>
 
           {election.status === "scheduled" && (
-            <div className="mt-4 flex justify-end">
-              <button
-                className={`px-4 py-2 bg-red-600 text-white rounded hover:bg-red-800 transition-colors ${
-                  disabling === election.election_id
-                    ? "opacity-50 cursor-not-allowed"
-                    : ""
-                }`}
-                disabled={disabling === election.election_id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setConfirmId(election.election_id);
-                }}
-              >
-                {disabling === election.election_id
-                  ? "جاري التعطيل..."
-                  : "تعطيل الانتخابات"}
-              </button>
+            <div className="mt-4">
+              <p className="text-gray-500 text-sm text-center">
+                الانتخابات المجدولة غير متاحة للعرض حتى بدء الوقت المحدد
+              </p>
             </div>
           )}
         </div>
@@ -250,32 +216,6 @@ const ManageElection = () => {
         <p className="text-center text-gray-500 py-8">
           لا توجد انتخابات متاحة حالياً.
         </p>
-      )}
-
-      {confirmId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm text-center space-y-4">
-            <h2 className="text-xl font-bold">هل أنت متأكد؟</h2>
-            <p>سيتم تعطيل هذه الانتخابات ولن يمكن التراجع عن هذا الإجراء.</p>
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={() => setConfirmId(null)}
-                className="px-4 py-2 bg-gray-400 rounded text-white hover:bg-gray-500 transition-colors"
-              >
-                إلغاء
-              </button>
-              <button
-                onClick={async () => {
-                  await handleDisable(confirmId);
-                  setConfirmId(null);
-                }}
-                className="px-4 py-2 bg-red-600 rounded text-white hover:bg-red-700 transition-colors"
-              >
-                تأكيد التعطيل
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
